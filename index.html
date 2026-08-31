@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<title>SmartFinance — Shaxsiy Moliya</title>
+<meta name="description" content="Oylik maoshni aqlli taqsimlash va xarajatlarni oflayn nazorat qilish">
+<meta name="theme-color" content="#10B981">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ============ ONBOARDING ============ -->
+  <div id="onboarding" class="onboard" style="display:none;">
+
+    <div class="onboard-step active" data-step="1">
+      <div class="glyph-badge">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+      </div>
+      <h1>Maoshingizni aqlli boshqaring</h1>
+      <p class="sub">Har oy qayerga necha pul ketayotganini ko'ring, limitlarni nazorat qiling — barchasi telefoningizda, internetsiz.</p>
+      <button class="btn btn-primary" id="ob-next-1">Boshlash</button>
+      <div class="dots"><span class="active"></span><span></span><span></span></div>
+    </div>
+
+    <div class="onboard-step" data-step="2">
+      <div class="glyph-badge">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+      </div>
+      <h1>Oylik maoshingiz qancha?</h1>
+      <p class="sub">Shu summa asosida xarajat kategoriyalariga avtomatik limit ajratamiz.</p>
+      <div class="field">
+        <label for="ob-salary">Oylik daromad (so'm)</label>
+        <input type="text" inputmode="numeric" id="ob-salary" placeholder="5 000 000">
+      </div>
+      <button class="btn btn-primary" id="ob-next-2" disabled>Davom etish</button>
+      <div class="dots"><span></span><span class="active"></span><span></span></div>
+    </div>
+
+    <div class="onboard-step" data-step="3">
+      <div class="glyph-badge">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="3"/><path d="M3 10h18M8 2v4M16 2v4"/></svg>
+      </div>
+      <h1>Maoshni qaysi kuni olasiz?</h1>
+      <p class="sub">Hisobot davri shu kundan boshlab, keyingi oyning shu kunigacha hisoblanadi.</p>
+      <div class="field">
+        <label for="ob-day">Oyning kuni</label>
+        <input type="number" min="1" max="28" id="ob-day" placeholder="10">
+      </div>
+      <button class="btn btn-primary" id="ob-finish">Ilovani boshlash</button>
+      <div class="dots"><span></span><span></span><span class="active"></span></div>
+    </div>
+
+  </div>
+
+  <!-- ============ HOME ============ -->
+  <div class="screen" id="screen-home">
+    <div class="topbar" style="padding-left:0;padding-right:0;">
+      <div>
+        <p class="greeting" id="home-greeting">Xush kelibsiz</p>
+        <p class="period" id="home-period">—</p>
+      </div>
+      <button class="icon-btn" id="btn-theme" aria-label="Mavzuni almashtirish">
+        <svg id="theme-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+      </button>
+    </div>
+
+    <div class="balance-card">
+      <p class="label">Qolgan erkin mablag'</p>
+      <p class="amount" id="home-remaining">0 <small>so'm</small></p>
+      <div class="balance-meta">
+        <div class="chip">
+          <p class="k">Maosh</p>
+          <p class="v" id="home-salary">0</p>
+        </div>
+        <div class="chip">
+          <p class="k">Sarflandi</p>
+          <p class="v" id="home-spent">0</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-head">
+      <h2>Kategoriyalar</h2>
+      <button class="link-btn" id="home-report-link">Oylik hisobot</button>
+    </div>
+
+    <div class="cat-list" id="home-cat-list"></div>
+  </div>
+
+  <!-- ============ EXPENSES ============ -->
+  <div class="screen" id="screen-expenses">
+    <div class="topbar" style="padding-left:0;padding-right:0;">
+      <div>
+        <p class="greeting">Joriy davr</p>
+        <p class="period">Xarajatlar</p>
+      </div>
+    </div>
+    <div id="expenses-list"></div>
+  </div>
+
+  <!-- ============ ANALYTICS ============ -->
+  <div class="screen" id="screen-analytics">
+    <div class="topbar" style="padding-left:0;padding-right:0;">
+      <div>
+        <p class="greeting">Joriy davr</p>
+        <p class="period">Tahlil</p>
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <h3>Kategoriyalar bo'yicha taqsimot</h3>
+      <div class="chart-wrap"><canvas id="donutChart"></canvas></div>
+      <div class="legend-list" id="donutLegend"></div>
+    </div>
+
+    <div class="chart-card">
+      <h3>Kunlik xarajatlar</h3>
+      <div class="chart-wrap bar"><canvas id="barChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- ============ SETTINGS ============ -->
+  <div class="screen" id="screen-settings">
+    <div class="topbar" style="padding-left:0;padding-right:0;">
+      <div>
+        <p class="greeting">Boshqaruv</p>
+        <p class="period">Sozlamalar</p>
+      </div>
+    </div>
+
+    <div class="settings-group">
+      <h3>Umumiy</h3>
+      <div class="settings-row" id="row-edit-salary">
+        <div>
+          <div class="row-label">Oylik maosh</div>
+          <div class="row-sub" id="settings-salary-sub">0 so'm</div>
+        </div>
+        <span class="row-val">Tahrirlash ›</span>
+      </div>
+      <div class="settings-row" id="row-edit-day">
+        <div>
+          <div class="row-label">Maosh kuni</div>
+          <div class="row-sub" id="settings-day-sub">—</div>
+        </div>
+        <span class="row-val">Tahrirlash ›</span>
+      </div>
+      <div class="settings-row">
+        <div class="row-label">Qorong'i rejim</div>
+        <div class="switch" id="switch-theme"></div>
+      </div>
+    </div>
+
+    <div class="settings-group">
+      <h3>Kategoriyalar va limitlar</h3>
+      <div id="settings-cat-list"></div>
+      <div class="pct-total" id="pct-total">Jami: <strong>100%</strong></div>
+    </div>
+
+    <div class="settings-group">
+      <h3>Ma'lumotlar</h3>
+      <div class="settings-row" id="row-export">
+        <div class="row-label">Yuklab olish (JSON)</div>
+        <span class="row-val">Eksport</span>
+      </div>
+      <div class="settings-row" id="row-import">
+        <div class="row-label">Zaxiradan tiklash</div>
+        <span class="row-val">Import</span>
+      </div>
+      <div class="settings-row" id="row-reset">
+        <div class="row-label" style="color:var(--danger);">Barcha ma'lumotni tozalash</div>
+        <span class="row-val">Reset</span>
+      </div>
+    </div>
+    <input type="file" id="import-file" accept="application/json" style="display:none;">
+  </div>
+
+  <!-- ============ FAB + NAV ============ -->
+  <button class="fab" id="fab-add" aria-label="Xarajat qo'shish">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+  </button>
+
+  <nav class="bottom-nav">
+    <button class="nav-btn active" data-screen="home">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V10"/></svg>
+      Bosh sahifa
+    </button>
+    <button class="nav-btn" data-screen="expenses">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z"/><path d="M8 9h8M8 13h8M8 17h4"/></svg>
+      Xarajatlar
+    </button>
+    <button class="nav-btn" data-screen="analytics">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg>
+      Tahlil
+    </button>
+    <button class="nav-btn" data-screen="settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+      Sozlamalar
+    </button>
+  </nav>
+
+  <!-- ============ QUICK ADD SHEET ============ -->
+  <div class="overlay" id="overlay-add">
+    <div class="sheet">
+      <button class="sheet-close" id="close-add">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+      <div class="sheet-handle"></div>
+      <p class="sheet-title">Xarajat qo'shish</p>
+
+      <div class="amount-display">
+        <span class="sum" id="qa-amount">0</span><span class="cur">so'm</span>
+      </div>
+
+      <div class="cat-picker" id="qa-cat-picker"></div>
+
+      <div class="field">
+        <label for="qa-note">Izoh (ixtiyoriy)</label>
+        <input type="text" id="qa-note" placeholder="Masalan: Non va sut">
+      </div>
+      <div class="field">
+        <label for="qa-date">Sana</label>
+        <input type="date" id="qa-date">
+      </div>
+
+      <div class="keypad" id="qa-keypad">
+        <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button>
+        <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button>
+        <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button>
+        <button data-k="000">000</button><button data-k="0">0</button><button class="kp-del" data-k="del">⌫</button>
+      </div>
+
+      <button class="btn btn-primary" id="qa-save" disabled>Saqlash</button>
+    </div>
+  </div>
+
+  <!-- ============ EDIT VALUE SHEET (salary / day) ============ -->
+  <div class="overlay" id="overlay-edit">
+    <div class="sheet">
+      <button class="sheet-close" id="close-edit">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+      <div class="sheet-handle"></div>
+      <p class="sheet-title" id="edit-title">Tahrirlash</p>
+      <div id="edit-fields"></div>
+      <button class="btn btn-primary" id="edit-save">Saqlash</button>
+    </div>
+  </div>
+
+  <!-- ============ MONTHLY REPORT SHEET ============ -->
+  <div class="overlay" id="overlay-report">
+    <div class="sheet" style="max-height:92vh;">
+      <button class="sheet-close" id="close-report">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+      <div class="sheet-handle"></div>
+      <p class="sheet-title">Oylik hisobot</p>
+      <div id="report-body"></div>
+    </div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
