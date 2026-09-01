@@ -1,12 +1,24 @@
 /* ============================================================
    SmartFinance PWA — Application logic
    100% local-first. No network calls. State lives in localStorage.
+
+   Data model (v2):
+   state = {
+     settings: { salaryDay, currency, theme },
+     periods: [ { id, periodStart, salaryAmount, categories:[...], closed } ],
+     expenses: [ { id, periodId, categoryId, amount, date, note } ],
+     incomes:  [ { id, periodId, amount, date, note } ],
+     debts:    [ { id, periodId, type:'lent'|'borrowed', amount, date, note } ]
+   }
+   Every period is a frozen snapshot once closed — editing salary or
+   category percentages only ever touches the LAST (open) period.
    ============================================================ */
 
 (function () {
   'use strict';
 
-  const STORAGE_KEY = 'smartfinance_state_v1';
+  const STORAGE_KEY = 'smartfinance_state_v2';
+  const OLD_STORAGE_KEY = 'smartfinance_state_v1';
 
   const DEFAULT_CATEGORIES = [
     { id: 'cat_food',     name: "Oziq-ovqat va Ro'zg'or",        icon: '🍲', percentage: 25, color: '#10B981' },
@@ -25,15 +37,49 @@
 
   let state = null;
 
+  function uid(prefix) {
+    return (prefix || 'id') + '_' + Math.random().toString(36).slice(2, 10);
+  }
+
   function loadState() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return null;
-      return JSON.parse(raw);
+      if (raw) return JSON.parse(raw);
+
+      // Migrate from the old flat (v1) shape if present, so early testers
+      // don't lose their data.
+      const oldRaw = localStorage.getItem(OLD_STORAGE_KEY);
+      if (oldRaw) {
+        const old = JSON.parse(oldRaw);
+        return migrateV1(old);
+      }
+      return null;
     } catch (e) {
       console.error('State load failed', e);
       return null;
     }
+  }
+
+  function migrateV1(old) {
+    const period = {
+      id: uid('per'),
+      periodStart: old.settings.periodStart || isoDate(todayDate()),
+      salaryAmount: old.settings.salaryAmount || 0,
+      categories: (old.categories || []).map((c) => ({ ...c })),
+      closed: false
+    };
+    const expenses = (old.expenses || []).map((e) => ({ ...e, periodId: period.id }));
+    return {
+      settings: {
+        salaryDay: old.settings.salaryDay || 1,
+        currency: old.settings.currency || 'UZS',
+        theme: old.settings.theme || 'light'
+      },
+      periods: [period],
+      expenses,
+      incomes: [],
+      debts: []
+    };
   }
 
   function saveState() {
@@ -45,26 +91,36 @@
     }
   }
 
-  function recalcAllocations() {
-    const salary = state.settings.salaryAmount;
-    state.categories.forEach((c) => {
-      c.allocatedAmount = Math.round((salary * c.percentage) / 100);
+  function currentPeriod() {
+    return state.periods[state.periods.length - 1];
+  }
+
+  function findPeriod(periodId) {
+    return state.periods.find((p) => p.id === periodId) || currentPeriod();
+  }
+
+  function recalcCurrentAllocations() {
+    const p = currentPeriod();
+    p.categories.forEach((c) => {
+      c.allocatedAmount = Math.round((p.salaryAmount * c.percentage) / 100);
     });
   }
 
   function createInitialState(salaryAmount, salaryDay) {
     const cats = DEFAULT_CATEGORIES.map((c) => ({ ...c, allocatedAmount: Math.round((salaryAmount * c.percentage) / 100) }));
-    return {
-      settings: {
-        salaryAmount,
-        salaryDay,
-        currency: 'UZS',
-        theme: 'light',
-        periodStart: computePeriodStartForToday(salaryDay)
-      },
+    const period = {
+      id: uid('per'),
+      periodStart: computePeriodStartForToday(salaryDay),
+      salaryAmount,
       categories: cats,
+      closed: false
+    };
+    return {
+      settings: { salaryDay, currency: 'UZS', theme: 'light' },
+      periods: [period],
       expenses: [],
-      monthlyArchives: []
+      incomes: [],
+      debts: []
     };
   }
 
@@ -84,7 +140,6 @@
   }
 
   function clampDay(year, month, day) {
-    // month is 0-indexed here
     const lastDay = new Date(year, month + 1, 0).getDate();
     return Math.min(day, lastDay);
   }
@@ -123,7 +178,8 @@
 
   function isPendingRollover() {
     if (!state) return false;
-    const end = periodEndDate(state.settings.periodStart, state.settings.salaryDay);
+    const p = currentPeriod();
+    const end = periodEndDate(p.periodStart, state.settings.salaryDay);
     return todayDate() >= end;
   }
 
@@ -141,20 +197,34 @@
     return parseInt((str || '0').toString().replace(/\D/g, ''), 10) || 0;
   }
 
-  // ---------------- Expense / period queries ----------------
+  // ---------------- Period-scoped queries ----------------
 
-  function currentPeriodExpenses() {
-    const start = state.settings.periodStart;
-    const end = isoDate(periodEndDate(start, state.settings.salaryDay));
-    return state.expenses.filter((e) => e.date.slice(0, 10) >= start && e.date.slice(0, 10) < end);
+  function periodExpenses(periodId) {
+    return state.expenses.filter((e) => e.periodId === periodId);
+  }
+  function periodIncomes(periodId) {
+    return state.incomes.filter((e) => e.periodId === periodId);
+  }
+  function periodDebts(periodId) {
+    return state.debts.filter((e) => e.periodId === periodId);
   }
 
   function spentByCategory(expenses) {
     const map = {};
-    expenses.forEach((e) => {
-      map[e.categoryId] = (map[e.categoryId] || 0) + e.amount;
-    });
+    expenses.forEach((e) => { map[e.categoryId] = (map[e.categoryId] || 0) + e.amount; });
     return map;
+  }
+
+  function periodBalance(period) {
+    const expenses = periodExpenses(period.id);
+    const incomes = periodIncomes(period.id);
+    const debts = periodDebts(period.id);
+    const totalExpense = expenses.reduce((s, e) => s + e.amount, 0);
+    const totalIncome = incomes.reduce((s, e) => s + e.amount, 0);
+    const totalBorrowed = debts.filter((d) => d.type === 'borrowed').reduce((s, d) => s + d.amount, 0);
+    const totalLent = debts.filter((d) => d.type === 'lent').reduce((s, d) => s + d.amount, 0);
+    const remaining = period.salaryAmount + totalIncome + totalBorrowed - totalLent - totalExpense;
+    return { totalExpense, totalIncome, totalBorrowed, totalLent, remaining };
   }
 
   function catStatus(spent, allocated) {
@@ -184,6 +254,14 @@
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.setAttribute('content', theme === 'dark' ? '#0B1220' : '#10B981');
   }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str == null ? '' : str;
+    return div.innerHTML;
+  }
+
+  function hexTint(hex) { return hex + '22'; }
 
   // ================================================================
   //  ONBOARDING
@@ -232,25 +310,36 @@
   }
 
   // ================================================================
-  //  RENDERING — HOME
+  //  RENDERING — HOME  (always the live/open period)
   // ================================================================
 
   function renderHome() {
-    document.getElementById('home-period').textContent = formatPeriodLabel(state.settings.periodStart, state.settings.salaryDay);
+    const p = currentPeriod();
+    document.getElementById('home-period').textContent = formatPeriodLabel(p.periodStart, state.settings.salaryDay);
 
     const hour = new Date().getHours();
     const greetEl = document.getElementById('home-greeting');
     greetEl.textContent = hour < 6 ? 'Xayrli tun' : hour < 12 ? 'Xayrli tong' : hour < 18 ? 'Xayrli kun' : 'Xayrli kech';
 
-    const expenses = currentPeriodExpenses();
-    const totalSpent = expenses.reduce((s, e) => s + e.amount, 0);
-    const remaining = state.settings.salaryAmount - totalSpent;
+    const bal = periodBalance(p);
 
-    document.getElementById('home-remaining').innerHTML = `${formatSom(remaining)} <small>so'm</small>`;
-    document.getElementById('home-salary').textContent = formatSom(state.settings.salaryAmount);
-    document.getElementById('home-spent').textContent = formatSom(totalSpent);
+    document.getElementById('home-remaining').innerHTML = `${formatSom(bal.remaining)} <small>so'm</small>`;
+    document.getElementById('home-salary').textContent = formatSom(p.salaryAmount);
+    document.getElementById('home-spent').textContent = formatSom(bal.totalExpense);
 
-    const spentMap = spentByCategory(expenses);
+    const subLine = document.getElementById('home-sub-line');
+    const extras = [];
+    if (bal.totalIncome > 0) extras.push(`+${formatSom(bal.totalIncome)} qo'shimcha daromad`);
+    if (bal.totalBorrowed > 0) extras.push(`+${formatSom(bal.totalBorrowed)} qarzga olingan`);
+    if (bal.totalLent > 0) extras.push(`−${formatSom(bal.totalLent)} qarzga berilgan`);
+    if (extras.length > 0) {
+      subLine.style.display = 'block';
+      subLine.textContent = extras.join(' · ');
+    } else {
+      subLine.style.display = 'none';
+    }
+
+    const spentMap = spentByCategory(periodExpenses(p.id));
     const list = document.getElementById('home-cat-list');
     list.innerHTML = '';
 
@@ -268,7 +357,7 @@
       banner.querySelector('#banner-open-report').addEventListener('click', () => openReport());
     }
 
-    state.categories.forEach((c) => {
+    p.categories.forEach((c) => {
       const spent = spentMap[c.id] || 0;
       const remainingCat = c.allocatedAmount - spent;
       const pct = c.allocatedAmount > 0 ? Math.min(100, (spent / c.allocatedAmount) * 100) : 100;
@@ -296,44 +385,74 @@
       list.appendChild(card);
     });
 
-    if (state.categories.length === 0) {
-      list.innerHTML = `<div class="empty-state"><div class="glyph">📂</div><h3>Kategoriya yo'q</h3><p>Sozlamalar bo'limidan kategoriya qo'shing.</p></div>`;
+    if (p.categories.length === 0) {
+      list.innerHTML += `<div class="empty-state"><div class="glyph">📂</div><h3>Kategoriya yo'q</h3><p>Sozlamalar bo'limidan kategoriya qo'shing.</p></div>`;
     }
   }
 
-  function hexTint(hex) {
-    // Light tint background behind an emoji, works reasonably in both themes.
-    return hex + '22';
+  // ================================================================
+  //  PERIOD SELECTORS (Expenses / Analytics screens — browse history)
+  // ================================================================
+
+  function populatePeriodSelect(selectEl, selectedId) {
+    selectEl.innerHTML = '';
+    // Most recent period first.
+    const ordered = state.periods.slice().reverse();
+    ordered.forEach((p, idx) => {
+      const isCurrent = p.id === currentPeriod().id;
+      const opt = document.createElement('option');
+      opt.value = p.id;
+      opt.textContent = formatPeriodLabel(p.periodStart, state.settings.salaryDay) + (isCurrent ? ' (joriy)' : '');
+      selectEl.appendChild(opt);
+    });
+    selectEl.value = selectedId || currentPeriod().id;
   }
 
-  function escapeHtml(str) {
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
-  }
+  let expViewingPeriodId = null;
+  let anViewingPeriodId = null;
 
   // ================================================================
-  //  RENDERING — EXPENSES
+  //  RENDERING — EXPENSES / TRANSACTIONS (history-aware)
   // ================================================================
 
   function renderExpenses() {
-    const container = document.getElementById('expenses-list');
-    const expenses = currentPeriodExpenses().slice().sort((a, b) => b.date.localeCompare(a.date));
+    if (!expViewingPeriodId) expViewingPeriodId = currentPeriod().id;
+    const select = document.getElementById('exp-period-select');
+    populatePeriodSelect(select, expViewingPeriodId);
 
-    if (expenses.length === 0) {
-      container.innerHTML = `<div class="empty-state"><div class="glyph">🧾</div><h3>Hozircha xarajat yo'q</h3><p>Pastdagi + tugmasi orqali birinchi xarajatingizni kiriting.</p></div>`;
+    const period = findPeriod(expViewingPeriodId);
+    const expenses = periodExpenses(period.id);
+    const incomes = periodIncomes(period.id);
+    const bal = periodBalance(period);
+
+    const summary = document.getElementById('expenses-summary');
+    summary.innerHTML = `
+      <div class="ts-item"><p class="k">Maosh</p><p class="v">${formatSom(period.salaryAmount)}</p></div>
+      <div class="ts-item"><p class="k">Sarf</p><p class="v" style="color:var(--danger);">${formatSom(bal.totalExpense)}</p></div>
+      <div class="ts-item"><p class="k">Qoldiq</p><p class="v" style="color:var(--primary-dark);">${formatSom(bal.remaining)}</p></div>
+    `;
+
+    const container = document.getElementById('expenses-list');
+    const catMap = {};
+    period.categories.forEach((c) => { catMap[c.id] = c; });
+
+    const items = [];
+    expenses.forEach((e) => items.push({ kind: 'expense', date: e.date, data: e }));
+    incomes.forEach((e) => items.push({ kind: 'income', date: e.date, data: e }));
+
+    if (items.length === 0) {
+      container.innerHTML = `<div class="empty-state"><div class="glyph">🧾</div><h3>Bu davrda yozuv yo'q</h3><p>Pastdagi + tugmasi orqali xarajat yoki daromad kiriting.</p></div>`;
       return;
     }
 
-    const groups = {};
-    expenses.forEach((e) => {
-      const key = e.date.slice(0, 10);
-      if (!groups[key]) groups[key] = [];
-      groups[key].push(e);
-    });
+    items.sort((a, b) => b.date.localeCompare(a.date));
 
-    const catMap = {};
-    state.categories.forEach((c) => { catMap[c.id] = c; });
+    const groups = {};
+    items.forEach((it) => {
+      const key = it.date.slice(0, 10);
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(it);
+    });
 
     container.innerHTML = '';
     Object.keys(groups).sort().reverse().forEach((dateKey) => {
@@ -344,21 +463,36 @@
       const label = isToday ? 'Bugun' : `${d.getDate()} ${MONTHS_UZ[d.getMonth()]}, ${WEEKDAYS_UZ[d.getDay()]}`;
       dayWrap.innerHTML = `<p class="exp-day-label">${label}</p>`;
 
-      groups[dateKey].forEach((e) => {
-        const cat = catMap[e.categoryId] || { icon: '❓', name: "O'chirilgan", color: '#94A3B8' };
+      groups[dateKey].forEach((it) => {
         const row = document.createElement('div');
-        row.className = 'exp-row';
-        row.innerHTML = `
-          <div class="cat-emoji" style="background:${hexTint(cat.color)};">${cat.icon}</div>
-          <div class="exp-info">
-            <div class="exp-cat">${escapeHtml(cat.name)}</div>
-            ${e.note ? `<div class="exp-note">${escapeHtml(e.note)}</div>` : ''}
-          </div>
-          <div class="exp-amt">${formatSom(e.amount)}</div>
-          <button class="exp-del" data-id="${e.id}" aria-label="O'chirish">
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6"/></svg>
-          </button>
-        `;
+        if (it.kind === 'expense') {
+          const cat = catMap[it.data.categoryId] || { icon: '❓', name: "O'chirilgan kategoriya", color: '#94A3B8' };
+          row.className = 'exp-row';
+          row.innerHTML = `
+            <div class="cat-emoji" style="background:${hexTint(cat.color)};">${cat.icon}</div>
+            <div class="exp-info">
+              <div class="exp-cat">${escapeHtml(cat.name)}</div>
+              ${it.data.note ? `<div class="exp-note">${escapeHtml(it.data.note)}</div>` : ''}
+            </div>
+            <div class="exp-amt">−${formatSom(it.data.amount)}</div>
+            <button class="exp-del" data-kind="expense" data-id="${it.data.id}" aria-label="O'chirish">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6"/></svg>
+            </button>
+          `;
+        } else {
+          row.className = 'exp-row income-row';
+          row.innerHTML = `
+            <div class="cat-emoji">💵</div>
+            <div class="exp-info">
+              <div class="exp-cat">Qo'shimcha daromad</div>
+              ${it.data.note ? `<div class="exp-note">${escapeHtml(it.data.note)}</div>` : ''}
+            </div>
+            <div class="exp-amt">+${formatSom(it.data.amount)}</div>
+            <button class="exp-del" data-kind="income" data-id="${it.data.id}" aria-label="O'chirish">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6"/></svg>
+            </button>
+          `;
+        }
         dayWrap.appendChild(row);
       });
       container.appendChild(dayWrap);
@@ -367,30 +501,90 @@
     container.querySelectorAll('.exp-del').forEach((btn) => {
       btn.addEventListener('click', () => {
         const id = btn.getAttribute('data-id');
-        state.expenses = state.expenses.filter((e) => e.id !== id);
+        const kind = btn.getAttribute('data-kind');
+        if (kind === 'expense') state.expenses = state.expenses.filter((e) => e.id !== id);
+        else state.incomes = state.incomes.filter((e) => e.id !== id);
         saveState();
         renderExpenses();
         renderHome();
-        showToast("Xarajat o'chirildi");
+        showToast("O'chirildi");
       });
     });
   }
 
   // ================================================================
-  //  RENDERING — ANALYTICS
+  //  RENDERING — DEBTS
+  // ================================================================
+
+  function renderDebts() {
+    const all = state.debts.slice().sort((a, b) => b.date.localeCompare(a.date));
+    const totalBorrowed = all.filter((d) => d.type === 'borrowed').reduce((s, d) => s + d.amount, 0);
+    const totalLent = all.filter((d) => d.type === 'lent').reduce((s, d) => s + d.amount, 0);
+
+    document.getElementById('debt-owed-to-me').textContent = formatSom(totalLent);
+    document.getElementById('debt-i-owe').textContent = formatSom(totalBorrowed);
+
+    const list = document.getElementById('debts-list');
+    if (all.length === 0) {
+      list.innerHTML = `<div class="empty-state"><div class="glyph">🤝</div><h3>Qarz yozuvi yo'q</h3><p>Pastdagi + tugmasi orqali qo'shing.</p></div>`;
+      return;
+    }
+
+    list.innerHTML = '';
+    all.forEach((d) => {
+      const period = state.periods.find((p) => p.id === d.periodId);
+      const dateObj = new Date(d.date.slice(0, 10) + 'T00:00:00');
+      const dateLabel = `${dateObj.getDate()} ${MONTHS_UZ[dateObj.getMonth()]}${period ? ' · ' + formatPeriodLabel(period.periodStart, state.settings.salaryDay) : ''}`;
+      const row = document.createElement('div');
+      row.className = 'debt-row';
+      const isBorrowed = d.type === 'borrowed';
+      row.innerHTML = `
+        <div class="d-icon" style="background:${isBorrowed ? 'var(--primary-tint)' : 'var(--danger-tint)'};color:${isBorrowed ? 'var(--primary-dark)' : 'var(--danger)'};">${isBorrowed ? '+' : '−'}</div>
+        <div class="d-info">
+          <div class="d-label">${isBorrowed ? 'Qarzga oldim' : 'Qarzga berdim'}</div>
+          ${d.note ? `<div class="d-note">${escapeHtml(d.note)}</div>` : ''}
+          <div class="d-date">${dateLabel}</div>
+        </div>
+        <div class="d-amt" style="color:${isBorrowed ? 'var(--primary-dark)' : 'var(--danger)'};">${isBorrowed ? '+' : '−'}${formatSom(d.amount)}</div>
+        <button class="exp-del" data-id="${d.id}" aria-label="O'chirish">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6"/></svg>
+        </button>
+      `;
+      list.appendChild(row);
+    });
+
+    list.querySelectorAll('.exp-del').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const id = btn.getAttribute('data-id');
+        state.debts = state.debts.filter((d) => d.id !== id);
+        saveState();
+        renderDebts();
+        renderHome();
+        showToast("O'chirildi");
+      });
+    });
+  }
+
+  // ================================================================
+  //  RENDERING — ANALYTICS (history-aware)
   // ================================================================
 
   let donutChartInstance = null;
   let barChartInstance = null;
 
   function renderAnalytics() {
-    const expenses = currentPeriodExpenses();
+    if (!anViewingPeriodId) anViewingPeriodId = currentPeriod().id;
+    const select = document.getElementById('an-period-select');
+    populatePeriodSelect(select, anViewingPeriodId);
+
+    const period = findPeriod(anViewingPeriodId);
+    const expenses = periodExpenses(period.id);
     const spentMap = spentByCategory(expenses);
 
     const labels = [];
     const data = [];
     const colors = [];
-    state.categories.forEach((c) => {
+    period.categories.forEach((c) => {
       const v = spentMap[c.id] || 0;
       if (v > 0) {
         labels.push(c.icon + ' ' + c.name);
@@ -406,7 +600,7 @@
     legendEl.innerHTML = '';
 
     if (data.length === 0) {
-      legendEl.innerHTML = `<div class="empty-state" style="padding:20px 0;"><p>Hali xarajat kiritilmagan</p></div>`;
+      legendEl.innerHTML = `<div class="empty-state" style="padding:20px 0;"><p>Bu davrda xarajat yo'q</p></div>`;
     } else {
       donutChartInstance = new Chart(donutCtx, {
         type: 'doughnut',
@@ -418,7 +612,7 @@
       });
 
       const total = data.reduce((a, b) => a + b, 0);
-      state.categories.forEach((c) => {
+      period.categories.forEach((c) => {
         const v = spentMap[c.id] || 0;
         if (v <= 0) return;
         const pct = total > 0 ? Math.round((v / total) * 100) : 0;
@@ -429,11 +623,12 @@
       });
     }
 
-    // Daily bar chart across the period so far
-    const start = new Date(state.settings.periodStart + 'T00:00:00');
-    const end = periodEndDate(state.settings.periodStart, state.settings.salaryDay);
+    // Daily bar chart across the selected period.
+    const start = new Date(period.periodStart + 'T00:00:00');
+    const end = periodEndDate(period.periodStart, state.settings.salaryDay);
     const today = todayDate();
-    const lastDay = today < end ? today : new Date(end.getTime() - 86400000);
+    const isCurrentPeriod = period.id === currentPeriod().id;
+    const lastDay = isCurrentPeriod && today < end ? today : new Date(end.getTime() - 86400000);
 
     const dayLabels = [];
     const dayTotals = [];
@@ -462,11 +657,12 @@
   }
 
   // ================================================================
-  //  RENDERING — SETTINGS
+  //  RENDERING — SETTINGS  (edits ONLY ever touch the open period)
   // ================================================================
 
   function renderSettings() {
-    document.getElementById('settings-salary-sub').textContent = `${formatSom(state.settings.salaryAmount)} so'm`;
+    const p = currentPeriod();
+    document.getElementById('settings-salary-sub').textContent = `${formatSom(p.salaryAmount)} so'm`;
     document.getElementById('settings-day-sub').textContent = `Har oyning ${state.settings.salaryDay}-sanasi`;
 
     const themeSwitch = document.getElementById('switch-theme');
@@ -475,7 +671,7 @@
     const list = document.getElementById('settings-cat-list');
     list.innerHTML = '';
 
-    state.categories.forEach((c) => {
+    p.categories.forEach((c) => {
       const row = document.createElement('div');
       row.className = 'cat-edit-row';
       row.innerHTML = `
@@ -504,9 +700,9 @@
 
     list.querySelectorAll('.pct-input').forEach((inp) => {
       inp.addEventListener('input', () => {
-        const cat = state.categories.find((c) => c.id === inp.getAttribute('data-id'));
+        const cat = currentPeriod().categories.find((c) => c.id === inp.getAttribute('data-id'));
         cat.percentage = Math.max(0, Math.min(100, parseInt(inp.value, 10) || 0));
-        recalcAllocations();
+        recalcCurrentAllocations();
         saveState();
         updatePctTotal();
         renderHome();
@@ -515,9 +711,9 @@
 
     list.querySelectorAll('.cat-del-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
-        if (state.categories.length <= 1) { showToast('Kamida bitta kategoriya kerak'); return; }
+        if (currentPeriod().categories.length <= 1) { showToast('Kamida bitta kategoriya kerak'); return; }
         const id = btn.getAttribute('data-id');
-        state.categories = state.categories.filter((c) => c.id !== id);
+        currentPeriod().categories = currentPeriod().categories.filter((c) => c.id !== id);
         saveState();
         renderSettings();
         renderHome();
@@ -526,7 +722,7 @@
   }
 
   function updatePctTotal() {
-    const total = state.categories.reduce((s, c) => s + c.percentage, 0);
+    const total = currentPeriod().categories.reduce((s, c) => s + c.percentage, 0);
     const el = document.getElementById('pct-total');
     el.innerHTML = `Jami: <strong>${total}%</strong>`;
     el.classList.toggle('bad', total !== 100);
@@ -544,11 +740,12 @@
       if (!name) { showToast('Nomini kiriting'); return false; }
       const pct = Math.max(0, Math.min(100, parseInt(values.percentage, 10) || 0));
       const palette = ['#10B981','#6366F1','#3B82F6','#F59E0B','#EC4899','#06B6D4','#EF4444','#8B5CF6','#14B8A6','#F97316'];
-      const color = palette[state.categories.length % palette.length];
-      state.categories.push({
-        id: 'cat_' + Math.random().toString(36).slice(2, 9),
+      const p = currentPeriod();
+      const color = palette[p.categories.length % palette.length];
+      p.categories.push({
+        id: uid('cat'),
         name, icon: values.icon || '📦', percentage: pct, color,
-        allocatedAmount: Math.round((state.settings.salaryAmount * pct) / 100)
+        allocatedAmount: Math.round((p.salaryAmount * pct) / 100)
       });
       saveState();
       renderSettings();
@@ -611,92 +808,149 @@
   }
 
   // ================================================================
-  //  QUICK ADD EXPENSE
+  //  FAB ACTION MENU
   // ================================================================
 
-  let qaAmountStr = '0';
-  let qaSelectedCat = null;
+  function openFabMenu() { openSheet('overlay-fab-menu'); }
 
-  function openQuickAdd() {
-    qaAmountStr = '0';
-    qaSelectedCat = state.categories[0] ? state.categories[0].id : null;
-    document.getElementById('qa-amount').textContent = '0';
-    document.getElementById('qa-note').value = '';
-    document.getElementById('qa-date').value = isoDate(todayDate());
-    renderQaCatPicker();
-    updateQaSaveState();
-    openSheet('overlay-add');
+  // ================================================================
+  //  UNIFIED TRANSACTION SHEET (expense / income / debt)
+  // ================================================================
+
+  let txnMode = 'expense'; // 'expense' | 'income' | 'debt'
+  let txnAmountStr = '0';
+  let txnSelectedCat = null;
+  let txnSelectedDebtType = null;
+
+  function openTxnSheet(mode) {
+    txnMode = mode;
+    txnAmountStr = '0';
+    txnSelectedCat = null;
+    txnSelectedDebtType = null;
+
+    document.getElementById('txn-amount').textContent = '0';
+    document.getElementById('txn-note').value = '';
+    document.getElementById('txn-date').value = isoDate(todayDate());
+
+    const catPicker = document.getElementById('txn-cat-picker');
+    const debtPicker = document.getElementById('txn-debt-picker');
+    const noteLabel = document.getElementById('txn-note-label');
+
+    if (mode === 'expense') {
+      document.getElementById('txn-title').textContent = 'Xarajat qo\'shish';
+      catPicker.style.display = 'grid';
+      debtPicker.style.display = 'none';
+      noteLabel.textContent = 'Izoh (ixtiyoriy)';
+      txnSelectedCat = currentPeriod().categories[0] ? currentPeriod().categories[0].id : null;
+      renderTxnCatPicker();
+    } else if (mode === 'income') {
+      document.getElementById('txn-title').textContent = 'Qo\'shimcha daromad';
+      catPicker.style.display = 'none';
+      debtPicker.style.display = 'none';
+      noteLabel.textContent = 'Manba (ixtiyoriy) — masalan: Bonus, Frilanс';
+    } else {
+      document.getElementById('txn-title').textContent = 'Qarz qo\'shish';
+      catPicker.style.display = 'none';
+      debtPicker.style.display = 'grid';
+      noteLabel.textContent = 'Kim bilan bog\'liq (ixtiyoriy)';
+      renderTxnDebtPicker();
+    }
+
+    updateTxnSaveState();
+    openSheet('overlay-txn');
   }
 
-  function renderQaCatPicker() {
-    const picker = document.getElementById('qa-cat-picker');
+  function renderTxnCatPicker() {
+    const picker = document.getElementById('txn-cat-picker');
     picker.innerHTML = '';
-    state.categories.forEach((c) => {
+    currentPeriod().categories.forEach((c) => {
       const btn = document.createElement('button');
-      btn.className = 'cat-pick' + (c.id === qaSelectedCat ? ' selected' : '');
+      btn.className = 'cat-pick' + (c.id === txnSelectedCat ? ' selected' : '');
       btn.innerHTML = `<span class="em">${c.icon}</span><span>${escapeHtml(c.name.split(' ')[0])}</span>`;
-      btn.addEventListener('click', () => {
-        qaSelectedCat = c.id;
-        renderQaCatPicker();
-      });
+      btn.addEventListener('click', () => { txnSelectedCat = c.id; renderTxnCatPicker(); updateTxnSaveState(); });
       picker.appendChild(btn);
     });
   }
 
-  function updateQaSaveState() {
-    const amt = parseAmountInput(qaAmountStr);
-    document.getElementById('qa-save').disabled = !(amt > 0 && qaSelectedCat);
+  function renderTxnDebtPicker() {
+    const picker = document.getElementById('txn-debt-picker');
+    picker.querySelectorAll('.cat-pick').forEach((btn) => {
+      btn.classList.toggle('selected', btn.getAttribute('data-debt-type') === txnSelectedDebtType);
+    });
   }
 
-  function initQuickAddKeypad() {
-    document.getElementById('qa-keypad').addEventListener('click', (e) => {
+  function updateTxnSaveState() {
+    const amt = parseAmountInput(txnAmountStr);
+    let ok = amt > 0;
+    if (txnMode === 'expense') ok = ok && !!txnSelectedCat;
+    if (txnMode === 'debt') ok = ok && !!txnSelectedDebtType;
+    document.getElementById('txn-save').disabled = !ok;
+  }
+
+  function initTxnSheet() {
+    document.getElementById('txn-keypad').addEventListener('click', (e) => {
       const btn = e.target.closest('button');
       if (!btn) return;
       const k = btn.getAttribute('data-k');
       if (k === 'del') {
-        qaAmountStr = qaAmountStr.slice(0, -1) || '0';
+        txnAmountStr = txnAmountStr.slice(0, -1) || '0';
       } else {
-        if (qaAmountStr === '0') qaAmountStr = '';
-        qaAmountStr += k;
-        if (qaAmountStr.length > 12) qaAmountStr = qaAmountStr.slice(0, 12);
+        if (txnAmountStr === '0') txnAmountStr = '';
+        txnAmountStr += k;
+        if (txnAmountStr.length > 12) txnAmountStr = txnAmountStr.slice(0, 12);
       }
-      document.getElementById('qa-amount').textContent = formatSom(parseAmountInput(qaAmountStr));
-      updateQaSaveState();
+      document.getElementById('txn-amount').textContent = formatSom(parseAmountInput(txnAmountStr));
+      updateTxnSaveState();
     });
 
-    document.getElementById('qa-save').addEventListener('click', () => {
-      const amount = parseAmountInput(qaAmountStr);
-      if (amount <= 0 || !qaSelectedCat) return;
-      const dateVal = document.getElementById('qa-date').value || isoDate(todayDate());
-      state.expenses.push({
-        id: 'exp_' + Math.random().toString(36).slice(2, 10),
-        categoryId: qaSelectedCat,
-        amount,
-        date: dateVal + 'T00:00:00.000Z',
-        note: document.getElementById('qa-note').value.trim()
-      });
+    document.getElementById('txn-debt-picker').addEventListener('click', (e) => {
+      const btn = e.target.closest('.cat-pick');
+      if (!btn) return;
+      txnSelectedDebtType = btn.getAttribute('data-debt-type');
+      renderTxnDebtPicker();
+      updateTxnSaveState();
+    });
+
+    document.getElementById('txn-save').addEventListener('click', () => {
+      const amount = parseAmountInput(txnAmountStr);
+      if (amount <= 0) return;
+      const dateVal = document.getElementById('txn-date').value || isoDate(todayDate());
+      const note = document.getElementById('txn-note').value.trim();
+      const periodId = currentPeriod().id;
+
+      if (txnMode === 'expense') {
+        if (!txnSelectedCat) return;
+        state.expenses.push({ id: uid('exp'), periodId, categoryId: txnSelectedCat, amount, date: dateVal + 'T00:00:00.000Z', note });
+        showToast("Xarajat qo'shildi");
+      } else if (txnMode === 'income') {
+        state.incomes.push({ id: uid('inc'), periodId, amount, date: dateVal + 'T00:00:00.000Z', note });
+        showToast("Daromad qo'shildi");
+      } else {
+        if (!txnSelectedDebtType) return;
+        state.debts.push({ id: uid('debt'), periodId, type: txnSelectedDebtType, amount, date: dateVal + 'T00:00:00.000Z', note });
+        showToast("Qarz qo'shildi");
+      }
+
       saveState();
-      closeSheet('overlay-add');
+      closeSheet('overlay-txn');
       renderHome();
       renderExpenses();
-      showToast("Xarajat qo'shildi");
+      renderDebts();
     });
   }
 
   // ================================================================
-  //  MONTHLY REPORT
+  //  MONTHLY REPORT (always for the current/open period until confirmed)
   // ================================================================
 
-  function buildReportData() {
-    const expenses = currentPeriodExpenses();
+  function buildReportData(period) {
+    const expenses = periodExpenses(period.id);
     const spentMap = spentByCategory(expenses);
-    const totalSpent = expenses.reduce((s, e) => s + e.amount, 0);
-    const totalIncome = state.settings.salaryAmount;
-    const saved = totalIncome - totalSpent;
+    const bal = periodBalance(period);
 
     const overspent = [];
     const underspent = [];
-    state.categories.forEach((c) => {
+    period.categories.forEach((c) => {
       const spent = spentMap[c.id] || 0;
       const diff = c.allocatedAmount - spent;
       if (diff < 0) overspent.push({ cat: c, over: -diff, spent });
@@ -705,24 +959,25 @@
     overspent.sort((a, b) => b.over - a.over);
     underspent.sort((a, b) => b.left - a.left);
 
-    const successScore = totalIncome > 0 ? Math.max(0, Math.min(100, Math.round(100 - (overspent.reduce((s, o) => s + o.over, 0) / totalIncome) * 100))) : 100;
+    const successScore = period.salaryAmount > 0 ? Math.max(0, Math.min(100, Math.round(100 - (overspent.reduce((s, o) => s + o.over, 0) / period.salaryAmount) * 100))) : 100;
 
     let advice;
     if (overspent.length > 0) {
       const worst = overspent[0];
       const overPct = worst.cat.allocatedAmount > 0 ? Math.round((worst.over / worst.cat.allocatedAmount) * 100) : 100;
       advice = `${worst.cat.name} xarajati limitdan ${overPct}% ga oshdi. Keyingi oyda bu toifaga ko'proq limit ajratish yoki sarfni kamaytirish tavsiya etiladi.`;
-    } else if (saved > 0) {
-      advice = `Barcha kategoriyalarda limit ichida qoldingiz va ${formatSom(saved)} so'm tejadingiz. Shu tartibni davom ettiring!`;
+    } else if (bal.remaining > 0) {
+      advice = `Barcha kategoriyalarda limit ichida qoldingiz va ${formatSom(bal.remaining)} so'm tejadingiz. Shu tartibni davom ettiring!`;
     } else {
       advice = "Xarajatlar rejaga mos keldi. Keyingi oyda jamg'arma ulushini biroz oshirishni ko'rib chiqing.";
     }
 
-    return { expenses, spentMap, totalSpent, totalIncome, saved, overspent, underspent, successScore, advice };
+    return { expenses, spentMap, bal, overspent, underspent, successScore, advice };
   }
 
   function openReport() {
-    const r = buildReportData();
+    const period = currentPeriod();
+    const r = buildReportData(period);
     const pending = isPendingRollover();
     const body = document.getElementById('report-body');
 
@@ -730,14 +985,17 @@
       <div class="report-hero">
         <div class="ring" style="--pct:${r.successScore}"><span>${r.successScore}%</span></div>
         <h3>Rejaga muvofiqlik darajasi</h3>
-        <p>${formatPeriodLabel(state.settings.periodStart, state.settings.salaryDay)}</p>
+        <p>${formatPeriodLabel(period.periodStart, state.settings.salaryDay)}</p>
       </div>
 
       <div class="report-block">
         <h4>Umumiy natija</h4>
-        <div class="rline"><span>Maosh</span><span>${formatSom(r.totalIncome)} so'm</span></div>
-        <div class="rline"><span>Sarflandi</span><span>${formatSom(r.totalSpent)} so'm</span></div>
-        <div class="rline ${r.saved >= 0 ? 'good' : 'bad'}"><span>${r.saved >= 0 ? 'Jamg\'armaga o\'tdi' : 'Ortiqcha sarflandi'}</span><span>${formatSom(Math.abs(r.saved))} so'm</span></div>
+        <div class="rline"><span>Maosh</span><span>${formatSom(period.salaryAmount)} so'm</span></div>
+        ${r.bal.totalIncome > 0 ? `<div class="rline good"><span>Qo'shimcha daromad</span><span>+${formatSom(r.bal.totalIncome)} so'm</span></div>` : ''}
+        ${r.bal.totalBorrowed > 0 ? `<div class="rline good"><span>Qarzga olingan</span><span>+${formatSom(r.bal.totalBorrowed)} so'm</span></div>` : ''}
+        ${r.bal.totalLent > 0 ? `<div class="rline bad"><span>Qarzga berilgan</span><span>−${formatSom(r.bal.totalLent)} so'm</span></div>` : ''}
+        <div class="rline"><span>Sarflandi</span><span>${formatSom(r.bal.totalExpense)} so'm</span></div>
+        <div class="rline ${r.bal.remaining >= 0 ? 'good' : 'bad'}"><span>${r.bal.remaining >= 0 ? 'Jamg\'armaga o\'tdi' : 'Ortiqcha sarflandi'}</span><span>${formatSom(Math.abs(r.bal.remaining))} so'm</span></div>
       </div>
     `;
 
@@ -760,38 +1018,60 @@
     html += `<div class="advice-box"><p class="a-label">💡 TAVSIYA</p>${escapeHtml(r.advice)}</div>`;
 
     if (pending) {
-      html += `<button class="btn btn-primary" id="confirm-rollover">Yangi davrni tasdiqlash</button>`;
+      html += `
+        <div class="field">
+          <label for="rollover-salary">Yangi davr uchun maosh (so'm)</label>
+          <input type="text" inputmode="numeric" id="rollover-salary" value="${formatSom(period.salaryAmount)}">
+        </div>
+        <button class="btn btn-primary" id="confirm-rollover">Yangi davrni tasdiqlash</button>
+      `;
     }
 
     body.innerHTML = html;
 
     if (pending) {
+      const salaryInput = document.getElementById('rollover-salary');
+      salaryInput.addEventListener('input', () => {
+        const digits = salaryInput.value.replace(/\D/g, '');
+        salaryInput.value = digits ? formatSom(parseInt(digits, 10)) : '';
+      });
       document.getElementById('confirm-rollover').addEventListener('click', () => {
-        doRollover(r);
+        const newSalary = parseAmountInput(salaryInput.value) || period.salaryAmount;
+        doRollover(newSalary);
       });
     }
 
     openSheet('overlay-report');
   }
 
-  function doRollover(reportData) {
-    state.monthlyArchives.push({
-      period: formatPeriodLabel(state.settings.periodStart, state.settings.salaryDay),
-      periodStart: state.settings.periodStart,
-      totalIncome: reportData.totalIncome,
-      totalSpent: reportData.totalSpent,
-      totalSaved: reportData.saved,
-      overspentCategories: reportData.overspent.map((o) => o.cat.id)
-    });
+  function doRollover(newSalary) {
+    const prev = currentPeriod();
+    prev.closed = true;
 
-    let newStart = periodEndDate(state.settings.periodStart, state.settings.salaryDay);
-    // If multiple periods have been skipped, jump forward to the most recent applicable start.
-    while (newStart < todayDate() && periodEndDate(isoDate(newStart), state.settings.salaryDay) <= todayDate()) {
+    let newStart = periodEndDate(prev.periodStart, state.settings.salaryDay);
+    // If multiple periods have been skipped while the app was closed, jump forward.
+    while (periodEndDate(isoDate(newStart), state.settings.salaryDay) <= todayDate()) {
       newStart = periodEndDate(isoDate(newStart), state.settings.salaryDay);
     }
-    state.settings.periodStart = isoDate(newStart);
+
+    const newCategories = prev.categories.map((c) => ({
+      id: c.id, name: c.name, icon: c.icon, percentage: c.percentage, color: c.color,
+      allocatedAmount: Math.round((newSalary * c.percentage) / 100)
+    }));
+
+    const newPeriod = {
+      id: uid('per'),
+      periodStart: isoDate(newStart),
+      salaryAmount: newSalary,
+      categories: newCategories,
+      closed: false
+    };
+    state.periods.push(newPeriod);
+
     saveState();
     closeSheet('overlay-report');
+    expViewingPeriodId = newPeriod.id;
+    anViewingPeriodId = newPeriod.id;
     renderAll();
     showToast('Yangi davr boshlandi');
   }
@@ -809,6 +1089,7 @@
     document.querySelectorAll('.nav-btn').forEach((b) => b.classList.toggle('active', b.getAttribute('data-screen') === name));
     if (name === 'analytics') renderAnalytics();
     if (name === 'expenses') renderExpenses();
+    if (name === 'debts') renderDebts();
     if (name === 'settings') renderSettings();
     if (name === 'home') renderHome();
   }
@@ -836,13 +1117,16 @@
     reader.onload = () => {
       try {
         const parsed = JSON.parse(reader.result);
-        if (!parsed.settings || !parsed.categories || !Array.isArray(parsed.expenses)) {
+        if (!parsed.settings || !Array.isArray(parsed.periods) || !Array.isArray(parsed.expenses)) {
           throw new Error('invalid shape');
         }
         state = parsed;
-        if (!state.monthlyArchives) state.monthlyArchives = [];
+        if (!state.incomes) state.incomes = [];
+        if (!state.debts) state.debts = [];
         saveState();
         applyTheme();
+        expViewingPeriodId = currentPeriod().id;
+        anViewingPeriodId = currentPeriod().id;
         renderAll();
         showToast('Ma\'lumotlar tiklandi');
       } catch (e) {
@@ -855,6 +1139,7 @@
   function resetAll() {
     if (!confirm("Barcha ma'lumotlar butunlay o'chiriladi. Davom etasizmi?")) return;
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(OLD_STORAGE_KEY);
     state = null;
     location.reload();
   }
@@ -872,10 +1157,17 @@
       btn.addEventListener('click', () => switchScreen(btn.getAttribute('data-screen')));
     });
 
-    document.getElementById('fab-add').addEventListener('click', openQuickAdd);
-    document.getElementById('close-add').addEventListener('click', () => closeSheet('overlay-add'));
-    document.getElementById('overlay-add').addEventListener('click', (e) => { if (e.target.id === 'overlay-add') closeSheet('overlay-add'); });
-    initQuickAddKeypad();
+    document.getElementById('fab-add').addEventListener('click', openFabMenu);
+    document.getElementById('close-fab-menu').addEventListener('click', () => closeSheet('overlay-fab-menu'));
+    document.getElementById('overlay-fab-menu').addEventListener('click', (e) => { if (e.target.id === 'overlay-fab-menu') closeSheet('overlay-fab-menu'); });
+
+    document.getElementById('fab-menu-expense').addEventListener('click', () => { closeSheet('overlay-fab-menu'); openTxnSheet('expense'); });
+    document.getElementById('fab-menu-income').addEventListener('click', () => { closeSheet('overlay-fab-menu'); openTxnSheet('income'); });
+    document.getElementById('fab-menu-debt').addEventListener('click', () => { closeSheet('overlay-fab-menu'); openTxnSheet('debt'); });
+
+    document.getElementById('close-txn').addEventListener('click', () => closeSheet('overlay-txn'));
+    document.getElementById('overlay-txn').addEventListener('click', (e) => { if (e.target.id === 'overlay-txn') closeSheet('overlay-txn'); });
+    initTxnSheet();
 
     document.getElementById('close-edit').addEventListener('click', () => closeSheet('overlay-edit'));
     document.getElementById('overlay-edit').addEventListener('click', (e) => { if (e.target.id === 'overlay-edit') closeSheet('overlay-edit'); });
@@ -885,20 +1177,29 @@
     document.getElementById('overlay-report').addEventListener('click', (e) => { if (e.target.id === 'overlay-report') closeSheet('overlay-report'); });
     document.getElementById('home-report-link').addEventListener('click', openReport);
 
+    document.getElementById('exp-period-select').addEventListener('change', (e) => {
+      expViewingPeriodId = e.target.value;
+      renderExpenses();
+    });
+    document.getElementById('an-period-select').addEventListener('change', (e) => {
+      anViewingPeriodId = e.target.value;
+      renderAnalytics();
+    });
+
     document.getElementById('btn-theme').addEventListener('click', toggleTheme);
     document.getElementById('switch-theme').addEventListener('click', toggleTheme);
 
     document.getElementById('row-edit-salary').addEventListener('click', () => {
-      openEditSheet('Oylik maosh', [{ key: 'salary', label: "Oylik daromad (so'm)", type: 'number', placeholder: '5 000 000' }], (v) => {
+      openEditSheet('Joriy davr maoshi', [{ key: 'salary', label: "Oylik daromad (so'm)", type: 'number', placeholder: '5 000 000' }], (v) => {
         const amt = parseAmountInput(v.salary);
         if (amt <= 0) { showToast("To'g'ri summa kiriting"); return false; }
-        state.settings.salaryAmount = amt;
-        recalcAllocations();
+        currentPeriod().salaryAmount = amt;
+        recalcCurrentAllocations();
         saveState();
         renderAll();
         return true;
       });
-      document.getElementById('ef-salary').value = formatSom(state.settings.salaryAmount);
+      document.getElementById('ef-salary').value = formatSom(currentPeriod().salaryAmount);
       document.getElementById('ef-salary').addEventListener('input', (e) => {
         const digits = e.target.value.replace(/\D/g, '');
         e.target.value = digits ? formatSom(parseInt(digits, 10)) : '';
@@ -944,11 +1245,14 @@
     const name = activeScreen ? activeScreen.getAttribute('data-screen') : 'home';
     if (name === 'analytics') renderAnalytics();
     if (name === 'expenses') renderExpenses();
+    if (name === 'debts') renderDebts();
     if (name === 'settings') renderSettings();
   }
 
   function boot() {
     document.getElementById('app').style.display = 'flex';
+    expViewingPeriodId = currentPeriod().id;
+    anViewingPeriodId = currentPeriod().id;
     applyTheme();
     wireEvents();
     switchScreen('home');
@@ -960,6 +1264,7 @@
       document.getElementById('app').style.display = 'none';
       initOnboarding();
     } else {
+      saveState(); // persist any v1->v2 migration immediately
       boot();
     }
 
