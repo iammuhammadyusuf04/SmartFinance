@@ -4,6 +4,15 @@ Shaxsiy moliya boshqaruvchisi — 100% oflayn, ma'lumotlar faqat telefon/brauzer
 
 ## Ishga tushirish
 
+### 1-yo'l: GitHub Pages (tavsiya etiladi, kompyuter/telefon farqisiz)
+
+1. Ushbu papkadagi barcha fayllarni (papkasiz, tekis holda) yangi GitHub repository'ga yuklang.
+2. Repository **public** bo'lishi kerak (bepul GitHub Pages uchun shart).
+3. Repo **Settings → Pages** bo'limida **Branch: main**, papka **/ (root)** ni tanlab **Save** bosing.
+4. Bir necha soniyadan so'ng `https://username.github.io/repo-nomi/` manzilida ilova ishlaydi.
+
+### 2-yo'l: Kompyuterda mahalliy server (dasturchilar uchun)
+
 Service Worker `file://` orqali ishlamaydi — papkani mahalliy serverdan ochish kerak:
 
 ```bash
@@ -14,7 +23,9 @@ python3 -m http.server 8080
 
 Yoki VS Code'dagi "Live Server" kengaytmasi, yoki `npx serve` bilan ham ochish mumkin.
 
-Telefonda **"Bosh ekranga qo'shish / Add to Home Screen"** orqali odatiy ilova kabi o'rnatiladi va shundan keyin to'liq oflayn ishlaydi.
+### Telefonga o'rnatish
+
+Ilova qaysi usulda (GitHub Pages yoki localhost) ochilishidan qat'i nazar, telefon brauzerida **"Bosh ekranga qo'shish / Add to Home Screen"** orqali odatiy ilova kabi o'rnatiladi va shundan keyin to'liq oflayn ishlaydi. Eslatma: `localhost` faqat o'sha kompyuterning o'zida ochiladi — telefonda ko'rish uchun GitHub Pages (yoki bir xil Wi-Fi tarmog'idagi IP manzil) kerak.
 
 ## Fayllar
 

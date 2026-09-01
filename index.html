@@ -19,51 +19,50 @@
 </head>
 <body>
 
-  <!-- ============ ONBOARDING ============ -->
-  <div id="onboarding" class="onboard" style="display:none;">
+<!-- ============ ONBOARDING ============ -->
+<div id="onboarding" class="onboard" style="display:none;">
 
-    <div class="onboard-step active" data-step="1">
-      <div class="glyph-badge">
-        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-      </div>
-      <h1>Maoshingizni aqlli boshqaring</h1>
-      <p class="sub">Har oy qayerga necha pul ketayotganini ko'ring, limitlarni nazorat qiling — barchasi telefoningizda, internetsiz.</p>
-      <button class="btn btn-primary" id="ob-next-1">Boshlash</button>
-      <div class="dots"><span class="active"></span><span></span><span></span></div>
+  <div class="onboard-step active" data-step="1">
+    <div class="glyph-badge">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
     </div>
-
-    <div class="onboard-step" data-step="2">
-      <div class="glyph-badge">
-        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-      </div>
-      <h1>Oylik maoshingiz qancha?</h1>
-      <p class="sub">Shu summa asosida xarajat kategoriyalariga avtomatik limit ajratamiz.</p>
-      <div class="field">
-        <label for="ob-salary">Oylik daromad (so'm)</label>
-        <input type="text" inputmode="numeric" id="ob-salary" placeholder="5 000 000">
-      </div>
-      <button class="btn btn-primary" id="ob-next-2" disabled>Davom etish</button>
-      <div class="dots"><span></span><span class="active"></span><span></span></div>
-    </div>
-
-    <div class="onboard-step" data-step="3">
-      <div class="glyph-badge">
-        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="3"/><path d="M3 10h18M8 2v4M16 2v4"/></svg>
-      </div>
-      <h1>Maoshni qaysi kuni olasiz?</h1>
-      <p class="sub">Hisobot davri shu kundan boshlab, keyingi oyning shu kunigacha hisoblanadi.</p>
-      <div class="field">
-        <label for="ob-day">Oyning kuni</label>
-        <input type="number" min="1" max="28" id="ob-day" placeholder="10">
-      </div>
-      <button class="btn btn-primary" id="ob-finish">Ilovani boshlash</button>
-      <div class="dots"><span></span><span></span><span class="active"></span></div>
-    </div>
-
+    <h1>Maoshingizni aqlli boshqaring</h1>
+    <p class="sub">Har oy qayerga necha pul ketayotganini ko'ring, limitlarni nazorat qiling — barchasi telefoningizda, internetsiz.</p>
+    <button class="btn btn-primary" id="ob-next-1">Boshlash</button>
+    <div class="dots"><span class="active"></span><span></span><span></span></div>
   </div>
 
-<div id="app">
+  <div class="onboard-step" data-step="2">
+    <div class="glyph-badge">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+    </div>
+    <h1>Oylik maoshingiz qancha?</h1>
+    <p class="sub">Shu summa asosida xarajat kategoriyalariga avtomatik limit ajratamiz.</p>
+    <div class="field">
+      <label for="ob-salary">Oylik daromad (so'm)</label>
+      <input type="text" inputmode="numeric" id="ob-salary" placeholder="5 000 000">
+    </div>
+    <button class="btn btn-primary" id="ob-next-2" disabled>Davom etish</button>
+    <div class="dots"><span></span><span class="active"></span><span></span></div>
+  </div>
 
+  <div class="onboard-step" data-step="3">
+    <div class="glyph-badge">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="3"/><path d="M3 10h18M8 2v4M16 2v4"/></svg>
+    </div>
+    <h1>Maoshni qaysi kuni olasiz?</h1>
+    <p class="sub">Hisobot davri shu kundan boshlab, keyingi oyning shu kunigacha hisoblanadi.</p>
+    <div class="field">
+      <label for="ob-day">Oyning kuni</label>
+      <input type="number" min="1" max="28" id="ob-day" placeholder="10">
+    </div>
+    <button class="btn btn-primary" id="ob-finish">Ilovani boshlash</button>
+    <div class="dots"><span></span><span></span><span class="active"></span></div>
+  </div>
+
+</div>
+
+<div id="app">
 
   <!-- ============ HOME ============ -->
   <div class="screen" id="screen-home">
@@ -80,6 +79,7 @@
     <div class="balance-card">
       <p class="label">Qolgan erkin mablag'</p>
       <p class="amount" id="home-remaining">0 <small>so'm</small></p>
+      <p class="sub-line" id="home-sub-line" style="display:none;"></p>
       <div class="balance-meta">
         <div class="chip">
           <p class="k">Maosh</p>
@@ -100,25 +100,54 @@
     <div class="cat-list" id="home-cat-list"></div>
   </div>
 
-  <!-- ============ EXPENSES ============ -->
+  <!-- ============ EXPENSES / TRANSACTIONS ============ -->
   <div class="screen" id="screen-expenses">
     <div class="topbar" style="padding-left:0;padding-right:0;">
       <div>
-        <p class="greeting">Joriy davr</p>
-        <p class="period">Xarajatlar</p>
+        <p class="greeting">Tarix</p>
+        <p class="period">Tranzaksiyalar</p>
       </div>
     </div>
+    <select id="exp-period-select" class="period-select"></select>
+    <div id="expenses-summary" class="txn-summary-row"></div>
     <div id="expenses-list"></div>
+  </div>
+
+  <!-- ============ DEBTS ============ -->
+  <div class="screen" id="screen-debts">
+    <div class="topbar" style="padding-left:0;padding-right:0;">
+      <div>
+        <p class="greeting">Boshqaruv</p>
+        <p class="period">Qarzlar</p>
+      </div>
+    </div>
+
+    <div class="balance-meta" style="margin-bottom:18px;">
+      <div class="chip" style="background:var(--primary-tint);">
+        <p class="k" style="color:var(--primary-dark);">Sizga qarzdorlar</p>
+        <p class="v" id="debt-owed-to-me" style="color:var(--primary-dark);">0</p>
+      </div>
+      <div class="chip" style="background:var(--danger-tint);">
+        <p class="k" style="color:var(--danger);">Siz qarzdorsiz</p>
+        <p class="v" id="debt-i-owe" style="color:var(--danger);">0</p>
+      </div>
+    </div>
+
+    <div class="section-head" style="margin-top:0;">
+      <h2>Barcha yozuvlar</h2>
+    </div>
+    <div id="debts-list"></div>
   </div>
 
   <!-- ============ ANALYTICS ============ -->
   <div class="screen" id="screen-analytics">
     <div class="topbar" style="padding-left:0;padding-right:0;">
       <div>
-        <p class="greeting">Joriy davr</p>
+        <p class="greeting">Tarix</p>
         <p class="period">Tahlil</p>
       </div>
     </div>
+    <select id="an-period-select" class="period-select"></select>
 
     <div class="chart-card">
       <h3>Kategoriyalar bo'yicha taqsimot</h3>
@@ -145,7 +174,7 @@
       <h3>Umumiy</h3>
       <div class="settings-row" id="row-edit-salary">
         <div>
-          <div class="row-label">Oylik maosh</div>
+          <div class="row-label">Joriy davr maoshi</div>
           <div class="row-sub" id="settings-salary-sub">0 so'm</div>
         </div>
         <span class="row-val">Tahrirlash ›</span>
@@ -162,9 +191,10 @@
         <div class="switch" id="switch-theme"></div>
       </div>
     </div>
+    <p class="hint-text">⚠️ Maosh yoki foizlarni o'zgartirish faqat joriy davrga ta'sir qiladi — o'tgan oylarning limitlari o'zgarmay saqlanadi.</p>
 
     <div class="settings-group">
-      <h3>Kategoriyalar va limitlar</h3>
+      <h3>Kategoriyalar va limitlar (joriy davr)</h3>
       <div id="settings-cat-list"></div>
       <div class="pct-total" id="pct-total">Jami: <strong>100%</strong></div>
     </div>
@@ -188,7 +218,7 @@
   </div>
 
   <!-- ============ FAB + NAV ============ -->
-  <button class="fab" id="fab-add" aria-label="Xarajat qo'shish">
+  <button class="fab" id="fab-add" aria-label="Qo'shish">
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
   </button>
 
@@ -199,7 +229,11 @@
     </button>
     <button class="nav-btn" data-screen="expenses">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z"/><path d="M8 9h8M8 13h8M8 17h4"/></svg>
-      Xarajatlar
+      Tarix
+    </button>
+    <button class="nav-btn" data-screen="debts">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 10l-4 2 4 2M17 10l4 2-4 2M4 12h16"/><path d="M9 6l3-2 3 2M9 18l3 2 3-2"/></svg>
+      Qarz
     </button>
     <button class="nav-btn" data-screen="analytics">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg>
@@ -211,38 +245,68 @@
     </button>
   </nav>
 
-  <!-- ============ QUICK ADD SHEET ============ -->
-  <div class="overlay" id="overlay-add">
-    <div class="sheet">
-      <button class="sheet-close" id="close-add">
+  <!-- ============ FAB ACTION CHOOSER ============ -->
+  <div class="overlay" id="overlay-fab-menu">
+    <div class="sheet" style="padding-bottom:26px;">
+      <button class="sheet-close" id="close-fab-menu">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
       </button>
       <div class="sheet-handle"></div>
-      <p class="sheet-title">Xarajat qo'shish</p>
+      <p class="sheet-title">Nima qo'shmoqchisiz?</p>
+      <div class="fab-menu-list">
+        <button class="fab-menu-item" id="fab-menu-expense">
+          <span class="fmi-icon" style="background:var(--danger-tint);color:var(--danger);">−</span>
+          <span class="fmi-text"><b>Xarajat</b><small>Kategoriya bo'yicha sarf</small></span>
+        </button>
+        <button class="fab-menu-item" id="fab-menu-income">
+          <span class="fmi-icon" style="background:var(--primary-tint);color:var(--primary-dark);">+</span>
+          <span class="fmi-text"><b>Qo'shimcha daromad</b><small>Maoshdan tashqari kirim</small></span>
+        </button>
+        <button class="fab-menu-item" id="fab-menu-debt">
+          <span class="fmi-icon" style="background:var(--accent-tint);color:var(--accent);">⇄</span>
+          <span class="fmi-text"><b>Qarz</b><small>Olgan yoki bergan puling</small></span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ UNIFIED TRANSACTION SHEET ============ -->
+  <div class="overlay" id="overlay-txn">
+    <div class="sheet">
+      <button class="sheet-close" id="close-txn">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+      <div class="sheet-handle"></div>
+      <p class="sheet-title" id="txn-title">Xarajat qo'shish</p>
 
       <div class="amount-display">
-        <span class="sum" id="qa-amount">0</span><span class="cur">so'm</span>
+        <span class="sum" id="txn-amount">0</span><span class="cur">so'm</span>
       </div>
 
-      <div class="cat-picker" id="qa-cat-picker"></div>
+      <div class="cat-picker" id="txn-cat-picker"></div>
+
+      <div class="cat-picker" id="txn-debt-picker" style="display:none;grid-template-columns:repeat(2,1fr);">
+        <button class="cat-pick" data-debt-type="borrowed"><span class="em">＋</span><span>Men oldim</span></button>
+        <button class="cat-pick" data-debt-type="lent"><span class="em">－</span><span>Men berdim</span></button>
+      </div>
 
       <div class="field">
-        <label for="qa-note">Izoh (ixtiyoriy)</label>
-        <input type="text" id="qa-note" placeholder="Masalan: Non va sut">
+        <label for="txn-note" id="txn-note-label">Izoh (ixtiyoriy)</label>
+        <input type="text" id="txn-note" placeholder="Masalan: Non va sut">
       </div>
       <div class="field">
-        <label for="qa-date">Sana</label>
-        <input type="date" id="qa-date">
+        <label for="txn-date">Sana</label>
+        <input type="date" id="txn-date">
       </div>
 
-      <div class="keypad" id="qa-keypad">
+      <div class="keypad" id="txn-keypad">
         <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button>
         <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button>
         <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button>
         <button data-k="000">000</button><button data-k="0">0</button><button class="kp-del" data-k="del">⌫</button>
       </div>
 
-      <button class="btn btn-primary" id="qa-save" disabled>Saqlash</button>
+      <button class="btn btn-primary" id="txn-save" disabled>Saqlash</button>
     </div>
   </div>
 
